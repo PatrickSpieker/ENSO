@@ -5,6 +5,9 @@ Spring 2017 - HPCC Research
 
 
 from Tkinter import *
+import matplotlib as mpl
+import matplotlib.backends.tkagg as tkagg
+from matplotlib.backends.backend_agg import FigureCanvasAgg
 import xarray as xr
 import pandas as pd
 import numpy as np
@@ -17,8 +20,6 @@ nino34 = ds['sst'].sel(lat=slice(-6.0, 6.0), lon=slice(190, 240))
 nino34 = nino34[:, 0, :, :]
 
 demean = lambda df: df - df.mean()
-
-#means = nino34.groupby('time.month').apply(np.mean)
 
 nino34 = nino34.groupby('time.month') - nino34.groupby('time.month').apply(np.mean)
 nino34 = nino34 / np.max([-1 * np.min(nino34.values), np.max(nino34.values)])
@@ -57,6 +58,7 @@ def train_dim(e_dim, x_train, x_test, dec_dict):
     decoder = Model(encoded_input, decoder_layer(encoded_input))
     dec_dict['dec'] = decoder
         
+# generating the values for the new matrix
 def gen_values(dec_dict, mtx, e_dim, dim_vals):
     dec = dec_dict['dec']
     ip = np.array([[float(l.get()) for l in dim_vals[0:int(e_dim.get())]]])
@@ -83,16 +85,20 @@ e_dim.set(3)
 e_dim.grid(row=2, column=0)
 
 # configuring the dim changing button
-set_dim = Button(mainframe, text="Set dim",\
+set_dim = Button(mainframe, text="Train on dimension",\
         command=lambda : train_dim(e_dim, x_train, x_test, dec_dict))
 set_dim.grid(row=3, column=0)
 
+
 # setting up the changable values widgets + labels
-dim_vals = [Entry(mainframe) for i in range(6)]
+Label(mainframe, text="Dimensional Values").grid(row=4, column=0)
+
+dim_vals = [Scale(mainframe, from_=-1, to_=1,
+                  orient=HORIZONTAL, resolution=0.1) for i in range(6)]
 for i,e in enumerate(dim_vals):
-    e.insert(0, 1.0*i/8)
-    Label(mainframe, text=str(i)).grid(row=4+2*i)
-    e.grid(row=4+2*i+1, column=0)
+    e.set(0)
+    Label(mainframe, text=str(i+1)).grid(row=5+2*i)
+    e.grid(row=5+2*i+1, column=0)
 
 # Setting up the actual matrix
 x_offset = 1
@@ -108,7 +114,29 @@ for i in xrange(1, 8):
         l = Label(mainframe, text="%d %d" % (i, j), highlightthickness=3)
         l.grid(row=i+y_offset-1, column=j+x_offset-1)
         mtx[i-1].append(l)
-#for child in mainframe.winfo_children(): child.grid_configure(padx=5, pady=5)
+
+def draw_figure(canvas, fig, loc=(0,0)):
+    fig_canvas_agg = FigureCanvasAgg(fig)
+    fig_canvas_agg.draw()
+    fig_x, fig_y, fig_w, fig_h = fig.bbox.bounds
+    fig_w, fig_h = int(fig_w), int(fig_h)
+    photo = PhotoImage(master=canvas, width=fig_w, height=fig_h)
+
+    canvas.create_image(loc[0] + fig_w/2, loc[1] + fig_h/2, image=photo)
+    tkagg.blit(photo, fig_canvas_agg.get_renderer()._renderer, colormode=2)
+
+    # Return a handle which contains a reference to the photo object
+    # which must be kept live or else the picture disappears
+    return photo
+
+fig =  mpl.pyplot.pcolormesh(mtx)
+
+
+fig_x, fig_y = 100, 100
+canvas = Canvas(mainframe, width = 700, height = 600)
+canvas.grid(row = y_offset, column = x_offset, rowspan=20, columnspan=10)
+fig_photo = draw_figure(canvas, fig, loc=(fig_x, fig_y))
+fig_h, fig_w = fig_photo.width(), fig_photo.height()
 
 # setting up the button to retrain the model
 get_new_mtx = Button(mainframe, text="Generate values",\
