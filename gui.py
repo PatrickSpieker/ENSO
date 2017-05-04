@@ -6,8 +6,10 @@ Spring 2017 - HPCC Research
 
 from Tkinter import *
 import matplotlib as mpl
+from matplotlib.figure import Figure
+import matplotlib.pyplot as pyplot
 import matplotlib.backends.tkagg as tkagg
-from matplotlib.backends.backend_agg import FigureCanvasAgg
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import xarray as xr
 import pandas as pd
 import numpy as np
@@ -58,16 +60,6 @@ def train_dim(e_dim, x_train, x_test, dec_dict):
     decoder = Model(encoded_input, decoder_layer(encoded_input))
     dec_dict['dec'] = decoder
         
-# generating the values for the new matrix
-def gen_values(dec_dict, mtx, e_dim, dim_vals):
-    dec = dec_dict['dec']
-    ip = np.array([[float(l.get()) for l in dim_vals[0:int(e_dim.get())]]])
-    output = dec.predict(ip)
-    output = output.reshape((7,26))
-    for i in xrange(1, 8):
-        for j in xrange(1, 27):
-            n = output[i-1][j-1]
-            mtx[i-1][j-1]['text']=round(n, 2)
 
 # setting up the main Tkinter framing stuff
 root = Tk()
@@ -107,44 +99,51 @@ y_offset = 0
 # setting the decoder dictionary for passing around the decoder
 dec_dict = {'dec': None}
 
-# setting up the matrix of widgets we will pass around
-mtx = [[] for i in range(8)]
-for i in xrange(1, 8):
-    for j in xrange(1, 27):
-        l = Label(mainframe, text="%d %d" % (i, j), highlightthickness=3)
-        l.grid(row=i+y_offset-1, column=j+x_offset-1)
-        mtx[i-1].append(l)
-
-def draw_figure(canvas, fig, loc=(0,0)):
-    fig_canvas_agg = FigureCanvasAgg(fig)
-    fig_canvas_agg.draw()
+def draw_figure(master, fig_canvas, fig, loc=(0,0)):
+    fig_canvas.draw()
+    """
     fig_x, fig_y, fig_w, fig_h = fig.bbox.bounds
     fig_w, fig_h = int(fig_w), int(fig_h)
-    photo = PhotoImage(master=canvas, width=fig_w, height=fig_h)
+    photo = PhotoImage(master=master, width=fig_w, height=fig_h)
 
     canvas.create_image(loc[0] + fig_w/2, loc[1] + fig_h/2, image=photo)
-    tkagg.blit(photo, fig_canvas_agg.get_renderer()._renderer, colormode=2)
+    tkagg.blit(photo, fig_canvas.get_renderer()._renderer, colormode=2)
 
     # Return a handle which contains a reference to the photo object
     # which must be kept live or else the picture disappears
     return photo
+    """
 
-fig =  mpl.pyplot.pcolormesh(mtx)
 
+# generating the values for the new matrix
+def gen_values(fig_canvas, quad, dec_dict, e_dim, dim_vals):
+    dec = dec_dict['dec']
+    ip = np.array([[float(l.get()) for l in dim_vals[0:int(e_dim.get())]]])
+    output = dec.predict(ip)
+    output = output.reshape((7*26,))
+    print(output)
+    quad.set_array(output)
+    fig_canvas.draw()
+    
 
+# start out the viz with just zeroes on the heatmap
+init_values = np.zeros(shape=(7,26))
+f = Figure(figsize=(7,4))
+a = f.add_subplot(111)
+quad = a.pcolormesh(init_values, vmin=-0.5, vmax=0.5, cmap='RdBu')
 fig_x, fig_y = 100, 100
-canvas = Canvas(mainframe, width = 700, height = 600)
-canvas.grid(row = y_offset, column = x_offset, rowspan=20, columnspan=10)
-fig_photo = draw_figure(canvas, fig, loc=(fig_x, fig_y))
-fig_h, fig_w = fig_photo.width(), fig_photo.height()
+
+
+fig_canvas  = FigureCanvasTkAgg(f, master=mainframe )
+fig_canvas.get_tk_widget().\
+        grid(row = y_offset, column = x_offset, rowspan=20, columnspan=10)
+fig_canvas.draw()
+fig_canvas.show()
 
 # setting up the button to retrain the model
 get_new_mtx = Button(mainframe, text="Generate values",\
-        command=lambda : gen_values(dec_dict, mtx, e_dim, dim_vals))
+        command=lambda : gen_values(fig_canvas, 
+            quad, dec_dict, e_dim, dim_vals))
 get_new_mtx.grid(row=0, column=0)
-
-
-
-root.bind('<Return>', lambda: regen(e_dim, x_train, x_test, dec_dict))
 
 root.mainloop()
